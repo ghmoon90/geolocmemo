@@ -1,0 +1,18 @@
+{
+  "name": "Map Memos",
+  "short_name": "MapMemos",
+  "description": "Pin memo notes on a map and keep them in JSON format.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#dce8e3",
+  "theme_color": "#0f766e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

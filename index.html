@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f766e">
+    <title>Map Memos</title>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="stylesheet" href="./styles.css?v=13">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="map-stage" aria-label="Memo map">
+        <div id="map" class="map" role="application" aria-label="Interactive memo map">
+          <div id="tileLayer" class="tile-layer" aria-hidden="true"></div>
+          <div id="markerLayer" class="marker-layer" aria-hidden="true"></div>
+        </div>
+
+        <div class="top-bar">
+          <div>
+            <p class="eyebrow">Map Memos</p>
+            <h1>Pin notes and media</h1>
+          </div>
+          <button id="locateBtn" class="icon-button" type="button" aria-label="Find current position" title="Find current position">
+            <span aria-hidden="true">*</span>
+          </button>
+        </div>
+
+        <div class="zoom-controls" aria-label="Zoom controls">
+          <button id="zoomInBtn" class="icon-button" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+          <button id="zoomOutBtn" class="icon-button" type="button" aria-label="Zoom out" title="Zoom out">-</button>
+        </div>
+
+        <div class="map-actions">
+          <button id="addHereBtn" class="primary-action" type="button">
+            <span aria-hidden="true">+</span>
+            Memo
+          </button>
+          <button id="addMediaBtn" class="secondary-action" type="button">
+            <span aria-hidden="true">[]</span>
+            Gallery
+          </button>
+          <button id="cameraBtn" class="secondary-action" type="button">
+            <span aria-hidden="true">o</span>
+            Camera
+          </button>
+        </div>
+      </section>
+
+      <aside id="memoSheet" class="memo-sheet" aria-label="Memo editor">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="sheet-header">
+          <div>
+            <p id="sheetMode" class="eyebrow">New memo</p>
+            <h2 id="coordinateLabel">Map center</h2>
+          </div>
+          <button id="closeSheetBtn" class="icon-button subtle" type="button" aria-label="Close memo editor" title="Close">x</button>
+        </div>
+
+        <div id="mediaPreview" class="media-preview" hidden></div>
+
+        <dl class="location-details">
+          <div>
+            <dt>Address</dt>
+            <dd id="addressLabel">No address yet</dd>
+          </div>
+          <div>
+            <dt>LLA</dt>
+            <dd id="llaLabel">No coordinates yet</dd>
+          </div>
+        </dl>
+
+        <label class="field">
+          <span>Title</span>
+          <input id="memoTitle" type="text" maxlength="80" placeholder="Coffee spot, photo, trail idea...">
+        </label>
+
+        <label class="field">
+          <span>Memo</span>
+          <textarea id="memoText" rows="5" placeholder="Save any text info here"></textarea>
+        </label>
+
+        <div class="field-grid">
+          <label class="field">
+            <span>Latitude</span>
+            <input id="memoLat" type="number" step="0.000001">
+          </label>
+          <label class="field">
+            <span>Longitude</span>
+            <input id="memoLng" type="number" step="0.000001">
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Altitude</span>
+          <input id="memoAlt" type="number" step="0.1" placeholder="Optional">
+        </label>
+
+        <div class="sheet-actions">
+          <button id="deleteMemoBtn" class="danger-button" type="button">Delete</button>
+          <button id="saveMemoBtn" class="save-button" type="button">Save memo</button>
+        </div>
+
+        <section class="storage-panel" aria-label="Memo storage">
+          <div class="panel-header">
+            <h3>Storage</h3>
+            <div class="compact-actions">
+              <button id="exportBtn" type="button">Export JSON</button>
+              <button id="importBtn" type="button">Import JSON</button>
+            </div>
+          </div>
+          <p>Memo data is saved as JSON. Media files stay in this browser's device storage.</p>
+          <input id="jsonFileInput" type="file" accept="application/json,.json" hidden>
+          <input id="mediaFileInput" type="file" accept="image/*,video/*,.heic,.heif" multiple hidden>
+          <input id="cameraFileInput" type="file" accept="image/*,.heic,.heif" capture="environment" hidden>
+        </section>
+      </aside>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </main>
+
+    <script src="./app.js?v=13"></script>
+  </body>
+</html>
