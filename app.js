@@ -4,6 +4,10 @@ const LEGACY_STORAGE_KEY = "map-memos:v1";
 const MEDIA_DB_NAME = "map-memos-media";
 const MEDIA_STORE_NAME = "media";
 const DEFAULT_VIEW = { lat: 37.5665, lng: 126.978, zoom: 13 };
+const GEO_OPTIONS = { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 };
+const GOOD_ACCURACY_METERS = 50;
+const MAX_ACCEPTABLE_ACCURACY_METERS = 150;
+const MAX_LOCATION_AGE_MS = 5000;
 
 const els = {
   map: document.querySelector("#map"),
@@ -344,7 +348,7 @@ function renderMarkers() {
     current.className = "marker current";
     current.style.left = `${position.x}px`;
     current.style.top = `${position.y}px`;
-    current.title = "Current position";
+    current.title = state.currentPosition.accuracy ? `Current position, about ${Math.round(state.currentPosition.accuracy)} m accuracy` : "Current position";
     els.markerLayer.append(current);
   }
 }
@@ -712,27 +716,23 @@ function importJsonText(text) {
   showToast(`Imported ${state.memos.length} memo${state.memos.length === 1 ? "" : "s"}.`);
 }
 
-function locate() {
-  if (!navigator.geolocation) {
-    showToast("Geolocation is not available in this browser.");
-    return;
-  }
+function normalizeGeoPosition(position, source = "Current position") {
+  return {
+    lat: normalizeLat(position.coords.latitude),
+    lng: normalizeLng(position.coords.longitude),
+    alt: Number.isFinite(Number(position.coords.altitude)) ? Number(Number(position.coords.altitude).toFixed(1)) : null,
+    accuracy: Number.isFinite(Number(position.coords.accuracy)) ? Number(position.coords.accuracy) : null,
+    timestamp: Number(position.timestamp) || Date.now(),
+    source
+  };
+}
 
-  showToast("Finding current position...");
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      const next = {
-        lat: normalizeLat(position.coords.latitude),
-        lng: normalizeLng(position.coords.longitude)
-      };
-      state.currentPosition = next;
-      state.zoom = Math.max(state.zoom, 16);
-      setCenter(next.lat, next.lng);
-      showToast("Current position found.");
-    },
-    () => showToast("Could not get current position."),
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
-  );
+function isAccurateEnough(position) {
+  return !position.accuracy || position.accuracy <= GOOD_ACCURACY_METERS;
+}
+
+function isAcceptablePosition(position) {
+  return !position.accuracy || position.accuracy <= MAX_ACCEPTABLE_ACCURACY_METERS;
 }
 
 function getCurrentPosition() {
@@ -742,21 +742,64 @@ function getCurrentPosition() {
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const current = {
-          lat: normalizeLat(position.coords.latitude),
-          lng: normalizeLng(position.coords.longitude),
-          alt: Number.isFinite(Number(position.coords.altitude)) ? Number(Number(position.coords.altitude).toFixed(1)) : null,
-          source: "Current position at capture"
-        };
-        state.currentPosition = current;
-        resolve(current);
-      },
-      () => reject(new Error("Could not get current position.")),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
-    );
+    let best = null;
+    let watchId = null;
+    let finished = false;
+    const requestedAt = Date.now();
+
+    const finish = (error = null) => {
+      if (finished) return;
+      finished = true;
+      window.clearTimeout(timer);
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+
+      if (best && isAcceptablePosition(best)) {
+        state.currentPosition = best;
+        resolve(best);
+        return;
+      }
+
+      if (best?.accuracy) {
+        reject(error || new Error(`Location is too broad (${Math.round(best.accuracy)} m). Turn on precise location and try again outdoors.`));
+        return;
+      }
+
+      reject(error || new Error("Location is not precise yet. Turn on precise location and try again outdoors."));
+    };
+
+    const accept = (position) => {
+      const current = normalizeGeoPosition(position, "Current position at capture");
+      if (current.timestamp < requestedAt - MAX_LOCATION_AGE_MS) return;
+      if (!best || (current.accuracy || Infinity) < (best.accuracy || Infinity)) best = current;
+      if (isAccurateEnough(current)) finish();
+    };
+
+    const timer = window.setTimeout(() => finish(), GEO_OPTIONS.timeout);
+
+    if (navigator.geolocation.watchPosition) {
+      watchId = navigator.geolocation.watchPosition(accept, () => finish(new Error("Could not get current position.")), GEO_OPTIONS);
+    } else {
+      navigator.geolocation.getCurrentPosition(accept, () => finish(new Error("Could not get current position.")), GEO_OPTIONS);
+    }
   });
+}
+
+async function locate() {
+  if (!navigator.geolocation) {
+    showToast("Geolocation is not available in this browser.");
+    return;
+  }
+
+  showToast("Finding precise current position...");
+  try {
+    const next = await getCurrentPosition();
+    state.zoom = Math.max(state.zoom, 16);
+    setCenter(next.lat, next.lng);
+    const accuracy = next.accuracy ? ` about ${Math.round(next.accuracy)} m` : "";
+    showToast(`Current position found${accuracy}.`);
+  } catch (error) {
+    showToast(error.message || "Could not get current position.");
+  }
 }
 
 function getStringFromBuffer(buffer) {
