@@ -21,12 +21,13 @@
             <p class="eyebrow">Map Memos</p>
             <h1>Pin notes and media</h1>
           </div>
-          <button id="locateBtn" class="icon-button" type="button" aria-label="Find current position" title="Find current position">
-            <span aria-hidden="true">*</span>
-          </button>
+          <button id="storageToggleBtn" class="icon-button" type="button" aria-label="Open JSON storage" title="JSON storage">{}</button>
         </div>
 
         <div class="zoom-controls" aria-label="Zoom controls">
+          <button id="locateBtn" class="icon-button" type="button" aria-label="Find current position" title="Find current position">
+            <span aria-hidden="true">*</span>
+          </button>
           <button id="zoomInBtn" class="icon-button" type="button" aria-label="Zoom in" title="Zoom in">+</button>
           <button id="zoomOutBtn" class="icon-button" type="button" aria-label="Zoom out" title="Zoom out">-</button>
         </div>
@@ -100,21 +101,32 @@
           <button id="deleteMemoBtn" class="danger-button" type="button">Delete</button>
           <button id="saveMemoBtn" class="save-button" type="button">Save memo</button>
         </div>
+      </aside>
 
-        <section class="storage-panel" aria-label="Memo storage">
-          <div class="panel-header">
-            <h3>Storage</h3>
+      <section id="storagePanel" class="storage-panel" aria-label="JSON storage">
+        <div class="panel-header">
+          <h3>JSON Storage</h3>
+          <button id="closeStorageBtn" class="icon-button subtle" type="button" aria-label="Close JSON storage" title="Close">x</button>
+        </div>
+        <p>Memo data is saved as JSON. Media files stay in this browser's device storage.</p>
+        <div class="export-selector" aria-label="Choose memos to export">
+          <div class="selector-header">
+            <span id="exportCountLabel">No memos selected</span>
             <div class="compact-actions">
-              <button id="exportBtn" type="button">Export JSON</button>
-              <button id="importBtn" type="button">Import JSON</button>
+              <button id="selectAllExportBtn" type="button">Select all</button>
+              <button id="deselectAllExportBtn" type="button">Deselect all</button>
             </div>
           </div>
-          <p>Memo data is saved as JSON. Media files stay in this browser's device storage.</p>
-          <input id="jsonFileInput" type="file" accept="application/json,.json" hidden>
-          <input id="mediaFileInput" type="file" accept="image/*,video/*,.heic,.heif" multiple hidden>
-          <input id="cameraFileInput" type="file" accept="image/*,.heic,.heif" capture="environment" hidden>
-        </section>
-      </aside>
+          <div id="exportMemoList" class="export-memo-list"></div>
+        </div>
+        <div class="storage-actions">
+          <button id="exportBtn" class="save-button" type="button">Export JSON</button>
+          <button id="importBtn" class="secondary-action" type="button">Import JSON</button>
+        </div>
+        <input id="jsonFileInput" type="file" accept="application/json,.json" hidden>
+        <input id="mediaFileInput" type="file" accept="image/*,video/*,.heic,.heif" multiple hidden>
+        <input id="cameraFileInput" type="file" accept="image/*,.heic,.heif" capture="environment" hidden>
+      </section>
 
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
     </main>

@@ -9,6 +9,7 @@ const els = {
   map: document.querySelector("#map"),
   tileLayer: document.querySelector("#tileLayer"),
   markerLayer: document.querySelector("#markerLayer"),
+  storageToggleBtn: document.querySelector("#storageToggleBtn"),
   locateBtn: document.querySelector("#locateBtn"),
   zoomInBtn: document.querySelector("#zoomInBtn"),
   zoomOutBtn: document.querySelector("#zoomOutBtn"),
@@ -29,8 +30,14 @@ const els = {
   memoAlt: document.querySelector("#memoAlt"),
   saveMemoBtn: document.querySelector("#saveMemoBtn"),
   deleteMemoBtn: document.querySelector("#deleteMemoBtn"),
+  storagePanel: document.querySelector("#storagePanel"),
+  closeStorageBtn: document.querySelector("#closeStorageBtn"),
   exportBtn: document.querySelector("#exportBtn"),
   importBtn: document.querySelector("#importBtn"),
+  selectAllExportBtn: document.querySelector("#selectAllExportBtn"),
+  deselectAllExportBtn: document.querySelector("#deselectAllExportBtn"),
+  exportCountLabel: document.querySelector("#exportCountLabel"),
+  exportMemoList: document.querySelector("#exportMemoList"),
   jsonFileInput: document.querySelector("#jsonFileInput"),
   mediaFileInput: document.querySelector("#mediaFileInput"),
   cameraFileInput: document.querySelector("#cameraFileInput"),
@@ -41,6 +48,7 @@ const state = {
   center: { lat: DEFAULT_VIEW.lat, lng: DEFAULT_VIEW.lng },
   zoom: DEFAULT_VIEW.zoom,
   memos: [],
+  exportSelection: new Set(),
   selectedId: null,
   pendingLocation: null,
   draftMedia: null,
@@ -173,11 +181,11 @@ function makeId(prefix = "memo") {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function getExportPayload() {
+function getExportPayload(memos = state.memos) {
   return {
     version: 2,
     exportedAt: new Date().toISOString(),
-    memos: state.memos.map(serializeMemo)
+    memos: memos.map(serializeMemo)
   };
 }
 
@@ -238,6 +246,7 @@ function loadLocal() {
     const parsed = JSON.parse(raw);
     const memos = Array.isArray(parsed) ? parsed : parsed.memos;
     state.memos = Array.isArray(memos) ? memos.map(normalizeMemo) : [];
+    selectAllMemosForExport();
   } catch {
     showToast("Saved data could not be loaded.");
   }
@@ -319,6 +328,9 @@ function renderMarkers() {
     marker.style.top = `${position.y}px`;
     marker.ariaLabel = memo.title ? `Open ${memo.kind} memo: ${memo.title}` : `Open ${memo.kind} memo`;
     marker.title = memo.title || memo.text.slice(0, 60) || "Memo";
+    marker.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+    });
     marker.addEventListener("click", (event) => {
       event.stopPropagation();
       openMemo(memo);
@@ -335,6 +347,66 @@ function renderMarkers() {
     current.title = "Current position";
     els.markerLayer.append(current);
   }
+}
+
+function getMemoExportLabel(memo, index) {
+  return memo.title || memo.text || `${memo.kind === "media" ? "Media" : "Memo"} ${index + 1}`;
+}
+
+function syncExportSelection() {
+  const liveIds = new Set(state.memos.map((memo) => memo.id));
+  state.exportSelection.forEach((id) => {
+    if (!liveIds.has(id)) state.exportSelection.delete(id);
+  });
+}
+
+function selectAllMemosForExport() {
+  state.exportSelection = new Set(state.memos.map((memo) => memo.id));
+}
+
+function renderExportSelector() {
+  syncExportSelection();
+  const selectedCount = state.exportSelection.size;
+  els.exportCountLabel.textContent = `${selectedCount} of ${state.memos.length} memo${state.memos.length === 1 ? "" : "s"} selected`;
+  els.exportMemoList.replaceChildren();
+
+  if (!state.memos.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-export-list";
+    empty.textContent = "No saved memos yet.";
+    els.exportMemoList.append(empty);
+    return;
+  }
+
+  state.memos.forEach((memo, index) => {
+    const label = document.createElement("label");
+    label.className = "export-memo-option";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = state.exportSelection.has(memo.id);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) {
+        state.exportSelection.add(memo.id);
+      } else {
+        state.exportSelection.delete(memo.id);
+      }
+      renderExportSelector();
+    });
+
+    const detail = document.createElement("span");
+    detail.className = "export-memo-detail";
+
+    const title = document.createElement("strong");
+    title.textContent = getMemoExportLabel(memo, index);
+
+    const coords = document.createElement("small");
+    coords.textContent = formatLla(memo);
+
+    detail.append(title, coords);
+    label.append(checkbox, detail);
+    els.exportMemoList.append(label);
+  });
 }
 
 function render() {
@@ -440,6 +512,15 @@ async function renderMediaPreview(media) {
 
 function openSheet() {
   els.sheet.classList.add("open");
+}
+
+function openStoragePanel() {
+  renderExportSelector();
+  els.storagePanel.classList.add("open");
+}
+
+function closeStoragePanel() {
+  els.storagePanel.classList.remove("open");
 }
 
 function closeSheet() {
@@ -574,12 +655,14 @@ function saveMemo() {
       updatedAt: now
     });
     state.memos.push(memo);
+    state.exportSelection.add(memo.id);
     ensureAddress(memo);
   }
 
   saveLocal();
   state.pendingLocation = null;
   setCenter(form.lat, form.lng);
+  renderExportSelector();
   closeSheet();
   showToast("Memo saved.");
 }
@@ -588,15 +671,23 @@ async function deleteMemo() {
   if (!state.selectedId) return;
   const existing = state.memos.find((memo) => memo.id === state.selectedId);
   state.memos = state.memos.filter((memo) => memo.id !== state.selectedId);
+  state.exportSelection.delete(state.selectedId);
   saveLocal();
   if (existing?.media?.id) await deleteMediaBlob(existing.media.id);
   closeSheet();
   render();
+  renderExportSelector();
   showToast("Memo deleted.");
 }
 
 function exportJson() {
-  const blob = new Blob([JSON.stringify(getExportPayload(), null, 2)], { type: "application/json" });
+  const selectedMemos = state.memos.filter((memo) => state.exportSelection.has(memo.id));
+  if (!selectedMemos.length) {
+    showToast("Select at least one memo to export.");
+    return;
+  }
+
+  const blob = new Blob([JSON.stringify(getExportPayload(selectedMemos), null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -613,9 +704,11 @@ function importJsonText(text) {
   state.memos = memos
     .filter((memo) => Number.isFinite(Number(memo.lat)) && Number.isFinite(Number(memo.lng)))
     .map(normalizeMemo);
+  selectAllMemosForExport();
 
   saveLocal();
   render();
+  renderExportSelector();
   showToast(`Imported ${state.memos.length} memo${state.memos.length === 1 ? "" : "s"}.`);
 }
 
@@ -1101,6 +1194,7 @@ async function importMediaFiles(files, options = {}) {
       updatedAt: now
     });
     state.memos.push(memo);
+    state.exportSelection.add(memo.id);
     pinned += 1;
     if (!location) missingGps += 1;
     ensureAddress(memo);
@@ -1108,13 +1202,14 @@ async function importMediaFiles(files, options = {}) {
 
   saveLocal();
   state.pendingLocation = null;
+  renderExportSelector();
   const last = state.memos[state.memos.length - 1];
   if (last) {
     state.zoom = Math.max(state.zoom, 15);
     openMemo(last);
   }
   if (missingGps) {
-    showToast(`${pinned} media pinned. ${missingGps} used map center.`);
+    showToast(`${pinned} media pinned. ${missingGps} used selected location.`);
   } else if (usedCurrentPosition) {
     showToast(`${pinned} camera media pinned using current position.`);
   } else {
@@ -1235,6 +1330,8 @@ function onPointerUp(event) {
 
 function bindEvents() {
   els.locateBtn.addEventListener("click", locate);
+  els.storageToggleBtn.addEventListener("click", openStoragePanel);
+  els.closeStorageBtn.addEventListener("click", closeStoragePanel);
   els.zoomInBtn.addEventListener("click", () => setZoom(state.zoom + 1));
   els.zoomOutBtn.addEventListener("click", () => setZoom(state.zoom - 1));
   els.addHereBtn.addEventListener("click", () => openNewMemo(getMemoTargetLocation()));
@@ -1245,6 +1342,14 @@ function bindEvents() {
   els.deleteMemoBtn.addEventListener("click", deleteMemo);
   els.exportBtn.addEventListener("click", exportJson);
   els.importBtn.addEventListener("click", () => els.jsonFileInput.click());
+  els.selectAllExportBtn.addEventListener("click", () => {
+    selectAllMemosForExport();
+    renderExportSelector();
+  });
+  els.deselectAllExportBtn.addEventListener("click", () => {
+    state.exportSelection.clear();
+    renderExportSelector();
+  });
   els.jsonFileInput.addEventListener("change", async () => {
     const file = els.jsonFileInput.files[0];
     if (!file) return;
@@ -1298,6 +1403,7 @@ function bindEvents() {
 
 loadLocal();
 bindEvents();
+renderExportSelector();
 render();
 
 if ("serviceWorker" in navigator) {
