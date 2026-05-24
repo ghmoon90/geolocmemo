@@ -4,10 +4,10 @@ const LEGACY_STORAGE_KEY = "map-memos:v1";
 const MEDIA_DB_NAME = "map-memos-media";
 const MEDIA_STORE_NAME = "media";
 const DEFAULT_VIEW = { lat: 37.5665, lng: 126.978, zoom: 13 };
-const GEO_OPTIONS = { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 };
+const GEO_OPTIONS = { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 };
 const GOOD_ACCURACY_METERS = 50;
 const MAX_ACCEPTABLE_ACCURACY_METERS = 150;
-const MAX_LOCATION_AGE_MS = 5000;
+const LOCATION_HARD_TIMEOUT_MS = 14000;
 
 const els = {
   map: document.querySelector("#map"),
@@ -745,7 +745,7 @@ function getCurrentPosition() {
     let best = null;
     let watchId = null;
     let finished = false;
-    const requestedAt = Date.now();
+    let lastError = null;
 
     const finish = (error = null) => {
       if (finished) return;
@@ -760,27 +760,37 @@ function getCurrentPosition() {
       }
 
       if (best?.accuracy) {
-        reject(error || new Error(`Location is too broad (${Math.round(best.accuracy)} m). Turn on precise location and try again outdoors.`));
+        reject(error || new Error(`Location is too broad (${Math.round(best.accuracy)} m). Turn on Android Precise location and try again outdoors.`));
         return;
       }
 
-      reject(error || new Error("Location is not precise yet. Turn on precise location and try again outdoors."));
+      reject(error || lastError || new Error("Location did not respond. Check Android location permission and try again."));
     };
 
     const accept = (position) => {
       const current = normalizeGeoPosition(position, "Current position at capture");
-      if (current.timestamp < requestedAt - MAX_LOCATION_AGE_MS) return;
       if (!best || (current.accuracy || Infinity) < (best.accuracy || Infinity)) best = current;
       if (isAccurateEnough(current)) finish();
     };
 
-    const timer = window.setTimeout(() => finish(), GEO_OPTIONS.timeout);
+    const fail = (error) => {
+      lastError = error?.message ? new Error(error.message) : new Error("Could not get current position.");
+    };
+
+    const timer = window.setTimeout(() => finish(), LOCATION_HARD_TIMEOUT_MS);
 
     if (navigator.geolocation.watchPosition) {
-      watchId = navigator.geolocation.watchPosition(accept, () => finish(new Error("Could not get current position.")), GEO_OPTIONS);
-    } else {
-      navigator.geolocation.getCurrentPosition(accept, () => finish(new Error("Could not get current position.")), GEO_OPTIONS);
+      watchId = navigator.geolocation.watchPosition(accept, fail, GEO_OPTIONS);
     }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        accept(position);
+        window.setTimeout(() => finish(), 400);
+      },
+      fail,
+      GEO_OPTIONS
+    );
   });
 }
 
