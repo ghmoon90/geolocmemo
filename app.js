@@ -42,6 +42,7 @@ const state = {
   zoom: DEFAULT_VIEW.zoom,
   memos: [],
   selectedId: null,
+  pendingLocation: null,
   draftMedia: null,
   currentPosition: null,
   pointers: new Map(),
@@ -297,6 +298,16 @@ function renderTiles() {
 function renderMarkers() {
   els.markerLayer.replaceChildren();
 
+  if (state.pendingLocation) {
+    const position = latLngToScreen(state.pendingLocation.lat, state.pendingLocation.lng);
+    const marker = document.createElement("div");
+    marker.className = "marker pending";
+    marker.style.left = `${position.x}px`;
+    marker.style.top = `${position.y}px`;
+    marker.title = "Selected location";
+    els.markerLayer.append(marker);
+  }
+
   state.memos.forEach((memo) => {
     const position = latLngToScreen(memo.lat, memo.lng);
     const marker = document.createElement("button");
@@ -329,7 +340,8 @@ function renderMarkers() {
 function render() {
   renderTiles();
   renderMarkers();
-  els.coordinateLabel.textContent = `${formatCoord(state.center.lat)}, ${formatCoord(state.center.lng)}`;
+  const activeLocation = state.pendingLocation || state.center;
+  els.coordinateLabel.textContent = `${formatCoord(activeLocation.lat)}, ${formatCoord(activeLocation.lng)}`;
 }
 
 function setCenter(lat, lng) {
@@ -338,6 +350,20 @@ function setCenter(lat, lng) {
     lng: normalizeLng(lng)
   };
   render();
+}
+
+function setPendingLocation(latLng) {
+  state.pendingLocation = {
+    lat: normalizeLat(latLng.lat),
+    lng: normalizeLng(latLng.lng),
+    alt: latLng.alt !== null && latLng.alt !== "" && Number.isFinite(Number(latLng.alt)) ? Number(Number(latLng.alt).toFixed(1)) : null
+  };
+  state.selectedId = null;
+  render();
+}
+
+function getMemoTargetLocation() {
+  return state.pendingLocation || state.center;
 }
 
 function setZoom(nextZoom, anchorEvent) {
@@ -451,6 +477,7 @@ async function ensureAddress(memo) {
 }
 
 function openMemo(memo) {
+  state.pendingLocation = null;
   state.selectedId = memo.id;
   state.draftMedia = memo.media || null;
   els.sheetMode.textContent = memo.kind === "media" ? "Media pin" : "Edit memo";
@@ -551,6 +578,7 @@ function saveMemo() {
   }
 
   saveLocal();
+  state.pendingLocation = null;
   setCenter(form.lat, form.lng);
   closeSheet();
   showToast("Memo saved.");
@@ -1049,7 +1077,7 @@ async function importMediaFiles(files, options = {}) {
       }
     }
 
-    const latLng = location || state.center;
+    const latLng = location || getMemoTargetLocation();
     const now = new Date().toISOString();
     const mediaId = makeId("asset");
     await putMediaBlob(mediaId, file);
@@ -1064,7 +1092,7 @@ async function importMediaFiles(files, options = {}) {
       id: makeId("media"),
       kind: "media",
       title: file.name,
-      text: location ? `Location source: ${location.source}` : "No GPS metadata found; pinned at map center.",
+      text: location ? `Location source: ${location.source}` : "No GPS metadata found; pinned at selected location.",
       lat: latLng.lat,
       lng: latLng.lng,
       alt: location?.alt ?? null,
@@ -1079,6 +1107,7 @@ async function importMediaFiles(files, options = {}) {
   }
 
   saveLocal();
+  state.pendingLocation = null;
   const last = state.memos[state.memos.length - 1];
   if (last) {
     state.zoom = Math.max(state.zoom, 15);
@@ -1197,8 +1226,10 @@ function onPointerUp(event) {
     state.pinch = null;
   }
 
-  if (wasDrag && !wasMoved && event.target === els.map) {
-    openNewMemo(screenToLatLng(event.clientX, event.clientY));
+  const tappedMapSurface = els.map.contains(event.target) && !event.target.closest(".marker");
+  if (wasDrag && !wasMoved && tappedMapSurface) {
+    setPendingLocation(screenToLatLng(event.clientX, event.clientY));
+    showToast("Location selected. Tap Memo to add a memo here.");
   }
 }
 
@@ -1206,7 +1237,7 @@ function bindEvents() {
   els.locateBtn.addEventListener("click", locate);
   els.zoomInBtn.addEventListener("click", () => setZoom(state.zoom + 1));
   els.zoomOutBtn.addEventListener("click", () => setZoom(state.zoom - 1));
-  els.addHereBtn.addEventListener("click", () => openNewMemo(state.center));
+  els.addHereBtn.addEventListener("click", () => openNewMemo(getMemoTargetLocation()));
   els.addMediaBtn.addEventListener("click", () => els.mediaFileInput.click());
   els.cameraBtn.addEventListener("click", () => els.cameraFileInput.click());
   els.closeSheetBtn.addEventListener("click", closeSheet);

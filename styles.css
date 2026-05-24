@@ -125,6 +125,18 @@ button {
   background: #d97706;
 }
 
+.marker.pending {
+  background: rgba(37, 99, 235, 0.16);
+  border-color: #2563eb;
+  border-style: dashed;
+  box-shadow: 0 8px 18px rgba(10, 35, 32, 0.18);
+  pointer-events: none;
+}
+
+.marker.pending::after {
+  background: #2563eb;
+}
+
 .top-bar {
   position: absolute;
   top: calc(env(safe-area-inset-top) + 14px);
