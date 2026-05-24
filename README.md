@@ -4,6 +4,10 @@ Geoloc Memo is a lightweight map memo app for saving notes and media at specific
 
 The app is built as a plain web app and packaged for Android with Capacitor.
 
+Live app: [https://ghmoon90.github.io/geolocmemo/](https://ghmoon90.github.io/geolocmemo/)
+
+![QR code for Geoloc Memo](assets/geolocmemo-qr.svg)
+
 ## Features
 
 - Tap the map to choose the exact memo location.
@@ -63,9 +67,34 @@ Use **Export JSON** to download memo metadata as a JSON file. This includes memo
 
 Media files themselves remain in this browser or device storage and are not embedded in the exported JSON.
 
+The exported file is downloaded by the browser with a name like `map-memos-2026-05-24.json`. In a PWA install, the exact file location is controlled by the browser or operating system, usually the user's Downloads folder or a browser download prompt.
+
 ### Importing Data
 
 Use **Import JSON** to restore memo metadata from a previously exported file. Imported memos are saved to local storage on the current device.
+
+## PWA Storage Location
+
+Geoloc Memo does not keep its active memo data as a visible `.json` file inside the project or phone storage. While using the PWA, memo metadata is stored in browser storage for the app origin:
+
+```text
+https://ghmoon90.github.io/geolocmemo/
+```
+
+The metadata storage key is:
+
+```text
+localStorage: map-memos:v2
+```
+
+Media blobs are stored separately in IndexedDB:
+
+```text
+Database: map-memos-media
+Object store: media
+```
+
+To get a portable JSON file, use **Export JSON** inside the app. To restore it later, use **Import JSON** and select that exported file.
 
 ## Data and Privacy
 
